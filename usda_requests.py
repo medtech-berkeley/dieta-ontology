@@ -1,51 +1,63 @@
-import requests, operator
+import operator
+import requests
 
-user_key = "zxYm6ZIca0tAevWXz3SJLofbkBc5wughcvoiuUKQ"
-url = "https://api.nal.usda.gov/fdc/v1/search?api_key=" + user_key
+USER_KEY = "zxYm6ZIca0tAevWXz3SJLofbkBc5wughcvoiuUKQ"
+USDA_URL = "https://api.nal.usda.gov/fdc/v1/search?api_key=" + USER_KEY
+HEADERS = {"Content-Type":"application/json"}
 
-headers = {"Content-Type":"application/json"}
+def search_usda(food):
+    data = '{"generalSearchInput":"' + food + '"}'
+    response = requests.post(USDA_URL, headers=HEADERS, data=data)
 
-food_input = input("Food input: ")
+    return response
 
-data = '{"generalSearchInput":"' + food_input + '"}'
+def get_ingredients(usda_response):
+    brands = usda_response.json()["foods"]
 
-response = requests.post(url, headers=headers, data=data)
-brands = response.json()["foods"]
+    all_brand_ingredients = []
 
-ingredients = []
+    for brand in brands:
+        if "ingredients" in brand:
+            all_brand_ingredients.append(brand["ingredients"].split(','))
 
-for brand in brands:
-    if "ingredients" in brand:
-        ingredients.append(brand["ingredients"].split(','))
+    return all_brand_ingredients
 
-length = len(ingredients)
-all_ingredients = {}
-for x in ingredients:
-    for ingredient in x:
-        if ingredient[0] == ' ':
-            ingredient = ingredient[1:]
-        if ingredient[-1] in ' .)':
-            ingredient = ingredient[:-1]
-        if ingredient not in all_ingredients:
-            all_ingredients[ingredient] = 0
+def ingredient_totals(all_brand_ingredients):
+    all_ingredients = {}
 
-for x in ingredients:
-    for ingredient in x:
-        for key in all_ingredients:
-            if key in ingredient:
-                all_ingredients[key] += 1
+    for brand in all_brand_ingredients:
+        for ingredient in brand:
+            if ingredient[0] == ' ':
+                ingredient = ingredient[1:]
+            if ingredient[-1] in ' .)':
+                ingredient = ingredient[:-1]
+            if ingredient not in all_ingredients:
+                all_ingredients[ingredient] = 0
 
-confidence = []
-max_freq = 0
-for key in all_ingredients.keys():
-    if all_ingredients[key] != 1:
-        max_freq = max(max_freq, all_ingredients[key])
-        confidence.append([key, all_ingredients[key]])
+    for brand in all_brand_ingredients:
+        for ingredient in brand:
+            for key in all_ingredients:
+                if key in ingredient:
+                    all_ingredients[key] += 1
 
-for l in confidence:
-    l[1] = (l[1] / max_freq) * 100
+    return all_ingredients
 
-confidence.sort(key=operator.itemgetter(1), reverse=True)
-print("likely ingredients:")
-for x in range(len(confidence)):
-    print(confidence[x][0], "with a confidence of", confidence[x][1], "%")
+def ingredient_frequencies(all_ingredients):
+    ingredient_confidences = []
+    max_freq = 0
+
+    for key in all_ingredients:
+        if all_ingredients[key] != 1:
+            max_freq = max(max_freq, all_ingredients[key])
+            ingredient_confidences.append([key, all_ingredients[key]])
+
+    for ingredient in ingredient_confidences:
+        ingredient[1] = (ingredient[1] / max_freq) * 100
+
+    ingredient_confidences.sort(key=operator.itemgetter(1), reverse=True)
+
+    print("likely ingredients:")
+
+    for ingredient, relative_frequency in ingredient_confidences:
+        print(ingredient, "with a confidence of",
+              relative_frequency, "%")
